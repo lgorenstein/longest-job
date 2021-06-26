@@ -221,9 +221,9 @@ if [[ $# -gt 0 ]]; then
 fi
 
 # Default is to sort by node name, but '-t|--time' overrides it.
-SORT_OPTS=( -k 1,1 -k 3,3 -k 2,2 )
+SORT_OPTS=( -k 1,1 -k 3,3 -k 2,2n )
 if [[ $sortbytime -ne 0 ]]; then
-   SORT_OPTS=( -k 3,3 -k 1,1 -k 2,2 )
+   SORT_OPTS=( -k 3,3 -k 1,1 -k 2,2n )
 fi
 
 
