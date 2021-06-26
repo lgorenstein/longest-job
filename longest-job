@@ -1,0 +1,282 @@
+#!/bin/bash
+# ----------------------------------------------------------------------
+# A script to show when busy nodes would become free (i.e. when the last
+# Slurm job on each node exits).
+#
+# Usage: longest-job [-h|--help] [OPTIONS] [nodelist(s)]
+#
+#
+# By Lev Gorenstein <lev@purdue.edu>, Purdue University, 2021
+#
+# ----------------------------------------------------------------------
+
+VERSION="0.1"          # Increment me!
+PROGNAME=${BASH_SOURCE##*/}
+
+# ----------------------------------------------------------------------
+# Configuration and initialization.
+# ----------------------------------------------------------------------
+# Safe $PATH and sane behavior in pipes
+export PATH=/bin:/usr/bin:/usr/local/bin
+set -o pipefail
+
+# ----------------------------------------------------------------------
+# Auxillary functions.
+# ----------------------------------------------------------------------
+# Exit codes:
+E_OK=0                # Successful termination
+E_CMDLINE=1             # Bad command line
+E_RUNTIME=2             # Runtime error
+
+warn() {
+   # warn [-p] "message" ["message"...]
+   # Send message(s) to stderr (yes, I don't like '>&2' in the main code).
+   # With '-p' option, prefixes each message with "PROGNAME: " (and that's
+   # pretty much the main raison-d'etre for this function vs. plain "echo").
+   local msg prefix=""
+   if [[ "$1" = "-p" ]]; then
+      prefix="$PROGNAME: "; shift
+   fi
+
+   # And now say it.
+   for msg in "$@" ; do
+      echo -e "${prefix}${msg}" 1>&2
+   done
+}
+
+clean_up() {
+   # Perform pre-exit housekeeping
+   return
+}
+
+error_exit() {
+   # error_exit ["message" [status]]
+   # Special case: an explicitly empty message ('') will not be printed.
+   if [[ ! ($# -gt 0 && -z "$1") ]]; then
+      warn -p "${1:-"Unknown Error"}"
+   fi
+   clean_up
+   exit ${2:-$E_RUNTIME}
+}
+
+graceful_exit() {
+   # graceful_exit [status]]
+   clean_up
+   exit ${1:-$E_OK}
+}
+
+signal_exit() {
+   # Handle trapped signals
+   case $1 in
+      INT)
+         error_exit "Program interrupted by user" ;;
+      TERM)
+         error_exit "Program terminated" ;;
+      *)
+         error_exit "Terminating on unknown signal" ;;
+   esac
+}
+
+assert_modern_getopt() {
+   # This script depends on getopt handling short and long options.
+   # Older implementation of getopt may be incompatible, so let's check.
+   unset GETOPT_COMPATIBLE && getopt --test >& /dev/null
+   if [[ $? -ne 4 ]]; then
+      error_exit "Incompatible 'getopt' utility, can't proceed" $E_RUNTIME
+   fi
+}
+
+usage() {
+   local LEADIN="  $PROGNAME"
+   echo "Usage:"
+   echo -e "$LEADIN [-h|--help] [OPTIONS] [nodelist(s)]"
+}
+
+
+help_message() {
+   # Yes, I don't like the '<<-' form, so indentation is somewhat off
+   cat << _EOF_
+$PROGNAME ver. $VERSION
+
+A script to show when busy nodes could become free (i.e. when the last
+running Slurm job on each node exits).
+
+By default, reports such high-water mark jobs on every cluster node that
+has at least one active job on it (calls 'squeue --states=R' under the hood).
+A handful of familiar squeue options can be used to further limit
+reporting to certain nodes (by partition, by account, by QoS, etc).
+Alternatively, explicit Slurm-style nodelists can be passed as arguments.
+
+$(usage)
+
+General options:
+  -t, --time     Sort output by job end time (default is to sort by node name).
+      --quiet    Be really quiet (suppress most of non-essential output).
+  -V, --version  Print program version and exit.
+  -h, --help     Display this help message and exit.
+
+Recognized squeue-style filtering options (passed to the underlying 'squeue'
+call verbatim, so see 'man squeue' for further details):
+  -A, --account=<account_list>
+  -j, --jobs=<job_id_list>
+  -L, --licenses=<license_list>
+  -M, --clusters=<clusters_list>
+  -n, --name=<name_list>
+  -p, --partition=<part_list>
+  -q, --qos=<qos_list>
+  -R, --reservation=<reservation_name>
+  -u, --user=<user_list>
+  -w, --nodelist=<hostlist>
+
+In true squeue fashion, multiple filters are AND-ed.  If both '-w hostlist'
+flag and explicit node names (\$1...\$n) are given, explicit ones win.
+
+As a special case, nodelists in \$1...\$n can be absolute paths.
+Cue this excerpt from 'man scontrol':
+   > 'scontrol show hostlist' can also take the absolute pathname of a file
+   > (beginning with the character '/') containing a list of hostnames.
+
+
+Exit status:
+   $E_OK  - normal termination
+   $E_CMDLINE  - error parsing command line
+   $E_RUNTIME  - runtime error
+_EOF_
+   echo ""
+   return
+}
+
+
+# ----------------------------------------------------------------------
+# Trap signals
+# ----------------------------------------------------------------------
+trap "signal_exit TERM" TERM HUP
+trap "signal_exit INT"  INT
+
+
+
+# ----------------------------------------------------------------------
+# Parse command-line
+# ----------------------------------------------------------------------
+status=$E_OK             	# Hopefully ;-)
+verbo=0 			# Default verbosity
+sortbytime=0 			# Default is sort by node name
+declare -a SQUEUE_OPTS
+
+# Using new getopt from util-linux package
+SHORTOPTS="tVhA:j:L:M:n:p:q:R:u:w:"
+LONGOPTS="time,quiet,version,help,account:,jobs:,licenses:,clusters:,name:,partition:,qos:,reservation:,user:,nodelist:"
+assert_modern_getopt
+if ! TEMP=$(getopt -o "$SHORTOPTS" --long "$LONGOPTS" -- "$@"); then
+   usage; error_exit '' $E_CMDLINE
+fi
+eval set -- "$TEMP"
+while true; do
+   case "$1" in
+      -A | --account)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -j | --jobs)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -l | --licenses)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -M | --clusters)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -n | --name)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -p | --partition)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -q | --qos)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -R | --reservation)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -u | --user)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -w | --nodelist)
+         SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
+      -t | --time)
+         sortbytime=1; shift ;;
+      --quiet)
+         verbo=-1; shift ;;
+      -V | --version)
+         echo "$PROGNAME ver. $VERSION"; graceful_exit ;;
+      -h | --help)
+         help_message; graceful_exit ;;
+      --) shift; break ;;
+       *) error_exit "Internal error." $E_RUNTIME ;;
+   esac
+done
+
+
+# ----------------------------------------------------------------------
+# Defaults and sanity checks
+# ----------------------------------------------------------------------
+# Command line arguments will be taken as hostlists to look at.
+if [[ $# -gt 0 ]]; then
+   # Need to combine and canonicalize the lists, but no further checking.
+   # First generate a combined hostlist, then unroll it into a single names.
+   # Note: hostlist can be an absolute path to a file!
+   REPORT_NODELIST=$(scontrol show hostlist "$*") || error_exit "Can not generate nodelist"
+   REPORT_NODENAMES=( $(scontrol show hostnames "$REPORT_NODELIST") ) || error_exit "Can not generate hostnames list"
+   SQUEUE_OPTS+=( -w "$REPORT_NODELIST" )
+fi
+
+# Default is to sort by node name, but '-t|--time' overrides it.
+SORT_OPTS=( -k 1,1 -k 3,3 -k 2,2 )
+if [[ $sortbytime -ne 0 ]]; then
+   SORT_OPTS=( -k 3,3 -k 1,1 -k 2,2 )
+fi
+
+
+# ----------------------------------------------------------------------
+# Main logic
+# ----------------------------------------------------------------------
+# Get endtimes and nodelists for all running jobs.
+SQUEUE_OPTS=( --all --noheader --states=R -o '%e  %i  %N' "${SQUEUE_OPTS[@]}" )
+if ! readarray -t RUNNING_JOBS < <(squeue "${SQUEUE_OPTS[@]}"); then
+   error_exit "Failed to acquire running jobs list"
+fi
+
+# Loop over all jobs, split nodelists and collect all jobs per each node.
+# Hash keys are node names, values are pipe-separated endtime records
+# for each job on this node ("jobid  endtime1|jobid  endtime2|....").
+declare -A NODES_DATA
+for jobline in "${RUNNING_JOBS[@]}"; do
+   # Split squeue output
+   read -r end jobid nodelist < <(echo "$jobline")
+
+   # Expand multinode nodelists ("bell-a[001-004],bell-a123")
+   if [[ "$nodelist" == *[\[,]* ]]; then
+      readarray -t mynodes < <(scontrol show hostnames "$nodelist") || continue
+   else
+      mynodes=( "$nodelist" )
+   fi
+
+   # Append this job's information to each of its nodes.
+   # Since jobs can share nodes, multiple entries per node are possible.
+   for node in "${mynodes[@]}"; do
+      NODES_DATA[$node]+="$jobid  $end|"
+   done
+done
+
+# If we were not given nodes on the command line, report on all found nodes.
+if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
+   readarray -t REPORT_NODENAMES < <(printf "%s\n" "${!NODES_DATA[@]}" | sort)
+fi
+
+# And report expectation of the last-to-finish job on each node of interest.
+FMT="%-12s  %-12s  %s\n"
+[[ $verbo -ge 0 ]] && printf "$FMT" "NODE" "JobID" "END_TIME"
+for node in "${REPORT_NODENAMES[@]}"; do
+   data="${NODES_DATA[$node]%|}"           # Trim the last '|'
+   read -r jobid latest < <(echo "$data" | tr '|' "\n" | sort -k 2,2r | head -1)
+   if [[ -n $jobid && -n $latest ]]; then
+      printf "$FMT" "$node"  "$jobid" "$latest"
+   fi
+done | sort "${SORT_OPTS[@]}"
+
+
+# ----------------------------------------------------------------------
+# All done - exit.
+# ----------------------------------------------------------------------
+graceful_exit $status
+
