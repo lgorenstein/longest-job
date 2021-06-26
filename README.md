@@ -42,7 +42,7 @@ flag and explicit node names (`$1`...`$n`) are given, explicit ones win.
 
 As a special case, nodelists in `$1`...`$n` can be absolute paths.
 Cue this excerpt from `man scontrol`:
-   > 'scontrol show hostlist' can also take the absolute pathname of a file
+   > `scontrol show hostlist` can also take the absolute pathname of a file
    > (beginning with the character '/') containing a list of hostnames.
 
 
