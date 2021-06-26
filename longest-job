@@ -141,6 +141,10 @@ Exit status:
    $E_OK  - normal termination
    $E_CMDLINE  - error parsing command line
    $E_RUNTIME  - runtime error
+
+Author:
+   Lev Gorenstein <lev@purdue.edu>, Purdue University Research Computing, 2021.
+   On Github: https://github.com/lgorenstein/longest-job
 _EOF_
    echo ""
    return
