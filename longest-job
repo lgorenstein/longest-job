@@ -150,6 +150,11 @@ _EOF_
    return
 }
 
+max_width() {
+   # Find the nength of a longest string.
+   printf "%s\n" "$@" | awk 'length > max {max = length}; END{print max}'
+}
+
 
 # ----------------------------------------------------------------------
 # Trap signals
@@ -275,7 +280,9 @@ if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
 fi
 
 # And report expectation of the last-to-finish job on each node of interest.
-FMT="%-12s  %-12s  %s\n"
+wnodes=$(max_width "${REPORT_NODENAMES[@]}")
+wjobid=$(max_width "${JOBID[@]}")
+FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %s\n"
 if [[ $verbo -ge 0 ]]; then
    printf "$FMT" "NODE" "JobID" "END_TIME"
 fi
