@@ -214,6 +214,11 @@ done
 # ----------------------------------------------------------------------
 # Defaults and sanity checks
 # ----------------------------------------------------------------------
+# This script depends on associative arrays that are only present in Bash >= 4.
+if [[ "${BASH_VERSINFO:-0}" -lt 4 ]]; then
+   error_exit "Your bash version ${BASH_VERSION:-<unknown>} is too old (need >=4)."
+fi
+
 # Command line arguments will be taken as hostlists to look at.
 if [[ $# -gt 0 ]]; then
    # Need to combine and canonicalize the lists, but no further checking.
