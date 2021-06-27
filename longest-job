@@ -262,9 +262,10 @@ for jobline in "${RUNNING_JOBS[@]}"; do
       NODES_DATA[$node]+="$jobid  $end|"
    done
 done
+
 # If we were not given nodes on the command line, report on all found nodes.
 if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
-   readarray -t REPORT_NODENAMES < <(printf "%s\n" "${!NODES_DATA[@]}" | sort)
+  REPORT_NODENAMES=( "${!NODES_DATA[@]}" )
 fi
 
 # And report expectation of the last-to-finish job on each node of interest.
