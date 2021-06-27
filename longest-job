@@ -225,6 +225,7 @@ if [[ $# -gt 0 ]]; then
 fi
 
 # Default is to sort by node name, but '-t|--time' overrides it.
+export LC_ALL=C
 SORT_OPTS=( -k 1,1 -k 3,3 -k 2,2n )
 if [[ $sortbytime -ne 0 ]]; then
    SORT_OPTS=( -k 3,3 -k 1,1 -k 2,2n )
@@ -261,7 +262,6 @@ for jobline in "${RUNNING_JOBS[@]}"; do
       NODES_DATA[$node]+="$jobid  $end|"
    done
 done
-
 # If we were not given nodes on the command line, report on all found nodes.
 if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
    readarray -t REPORT_NODENAMES < <(printf "%s\n" "${!NODES_DATA[@]}" | sort)
