@@ -10,7 +10,7 @@
 #
 # ----------------------------------------------------------------------
 
-VERSION="0.2"          # Increment me!
+VERSION="0.3"          # Increment me!
 PROGNAME=${BASH_SOURCE##*/}
 
 # ----------------------------------------------------------------------
@@ -111,7 +111,8 @@ $(usage)
 
 General options:
   -t, --time     Sort output by job end time (default is to sort by node name).
-      --quiet    Be really quiet (suppress most of non-essential output).
+  -v, --verbose  Be verbose (print more job information for each job).
+      --quiet    Be really quiet (suppress header and non-essential output).
   -V, --version  Print program version and exit.
   -h, --help     Display this help message and exit.
 
@@ -173,8 +174,8 @@ sortbytime=0 			# Default is sort by node name
 declare -a SQUEUE_OPTS
 
 # Using new getopt from util-linux package
-SHORTOPTS="tVhA:j:L:M:n:p:q:R:u:w:"
-LONGOPTS="time,quiet,version,help,account:,jobs:,licenses:,clusters:,name:,partition:,qos:,reservation:,user:,nodelist:"
+SHORTOPTS="tvVhA:j:L:M:n:p:q:R:u:w:"
+LONGOPTS="time,verbose,quiet,version,help,account:,jobs:,licenses:,clusters:,name:,partition:,qos:,reservation:,user:,nodelist:"
 assert_modern_getopt
 if ! TEMP=$(getopt -o "$SHORTOPTS" --long "$LONGOPTS" -- "$@"); then
    usage; error_exit '' $E_CMDLINE
@@ -204,6 +205,8 @@ while true; do
          SQUEUE_OPTS+=( "$1" "$2" ); shift 2 ;;
       -t | --time)
          sortbytime=1; shift ;;
+      -v | --verbose)
+         verbo=1; shift ;;
       --quiet)
          verbo=-1; shift ;;
       -V | --version)
@@ -246,17 +249,21 @@ fi
 # Main logic
 # ----------------------------------------------------------------------
 # Get endtimes and nodelists for all running jobs.
-SQUEUE_OPTS=( --all --noheader --states=R -o '%e  %i  %N' "${SQUEUE_OPTS[@]}" )
+# Only initial "%e  %i  %N" are truly needed.  The rest is used for --verbose.
+# NB: If you change format here, remember to change header for final print!
+SQUEUE_FMT="%e  %i  %N  %9u %12a %16j %.5D %.6C %.11l %.2t %M"
+SQUEUE_OPTS=( --all --noheader --states=R -o "$SQUEUE_FMT" "${SQUEUE_OPTS[@]}" )
 if ! readarray -t RUNNING_JOBS < <(squeue "${SQUEUE_OPTS[@]}"); then
    error_exit "Failed to acquire running jobs list"
 fi
 
 # Loop over all jobs, split nodelists and collect longest running job
-# per each node.  Store in the two corresponding hashes (keys are node names).
-declare -A JOBID ENDTIME
+# for each node.  Store in the corresponding hashes (keys are node names).
+# JOBINFO gets all the extras (no splitting for simplicity).
+declare -A JOBID ENDTIME JOBINFO
 for jobline in "${RUNNING_JOBS[@]}"; do
    # Split squeue output
-   read -r end jobid nodelist < <(echo "$jobline")
+   read -r endtime jobid nodelist jobinfo < <(echo "$jobline")
 
    # Expand multinode nodelists ("bell-a[001-004],bell-a123")
    if [[ "$nodelist" == *[\[,]* ]]; then
@@ -267,9 +274,10 @@ for jobline in "${RUNNING_JOBS[@]}"; do
 
    # High-water mark this job's projected end time on all of its nodes.
    for node in "${mynodes[@]}"; do
-      if [[ "$end" > "${ENDTIME[$node]}" ]]; then
+      if [[ "$endtime" > "${ENDTIME[$node]}" ]]; then
          JOBID[$node]="$jobid"
-         ENDTIME[$node]="$end"
+         ENDTIME[$node]="$endtime"
+         JOBINFO[$node]="$jobinfo"
       fi
    done
 done
@@ -280,17 +288,29 @@ if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
 fi
 
 # And report expectation of the last-to-finish job on each node of interest.
+# Quiet mode:   print just node/jobid/entime table (no header).
+# Normal mode:  same with header.
+# Verbose mode: node/jobid/time and bunch of job parameters (with header).
 wnodes=$(max_width "${REPORT_NODENAMES[@]}")
 wjobid=$(max_width "${JOBID[@]}")
+wendtime=$(max_width "${ENDTIME[@]}")
 FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %s\n"
-if [[ $verbo -ge 0 ]]; then
+if [[ $verbo -eq 0 ]]; then
    printf "$FMT" "NODE" "JobID" "END_TIME"
+elif [[ $verbo -ge 0 ]]; then
+   FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %-${wendtime:-19}s  %s\n"
+   printf "$FMT" "NODE" "JobID" "END_TIME"  "USER      ACCOUNT      NAME             NODES   CPUS  TIME_LIMIT ST TIME"
 fi
 for node in "${REPORT_NODENAMES[@]}"; do
    jobid="${JOBID[$node]}"
-   end="${ENDTIME[$node]}"
-   if [[ -n $jobid && -n $end ]]; then
-      printf "$FMT" "$node"  "$jobid" "$end"
+   endtime="${ENDTIME[$node]}"
+   jobinfo="${JOBINFO[$node]}"
+   if [[ -n $jobid && -n $endtime ]]; then
+      if [[ $verbo -le 0 ]]; then
+         printf "$FMT"  "$node" "$jobid" "$endtime"
+      else
+         printf "$FMT"  "$node" "$jobid" "$endtime" "$jobinfo"
+      fi
    fi
 done | sort "${SORT_OPTS[@]}"
 

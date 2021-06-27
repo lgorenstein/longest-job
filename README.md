@@ -1,7 +1,7 @@
 # longest-job
 
-A tool to show when busy cluster nodes could become free (i.e. when the last
-running Slurm job on each node exits).
+A quick hack tool to show when busy cluster nodes could become free (i.e. when
+the last running Slurm job on each node exits).
 
 By default, reports such high-water mark jobs on every cluster node that
 has at least one active job on it (calls `squeue --states=R` under the hood).
@@ -17,7 +17,8 @@ Alternatively, explicit Slurm-style nodelists can be passed as arguments.
 **General options:**
 ```
   -t, --time     Sort output by job end time (default is to sort by node name).
-      --quiet    Be really quiet (suppress most of non-essential output).
+  -v, --verbose  Be verbose (print more job information for each job).
+      --quiet    Be really quiet (suppress header and non-essential output).
   -V, --version  Print program version and exit.
   -h, --help     Display this help message and exit.
 ```
