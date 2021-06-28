@@ -149,7 +149,7 @@ Exit status:
 
 Author:
    Lev Gorenstein <lev@purdue.edu>, Purdue University Research Computing, 2021.
-   On Github: https://github.com/lgorenstein/longest-job
+   Contribute: https://github.com/lgorenstein/longest-job
 _EOF_
    echo ""
    return

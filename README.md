@@ -67,3 +67,9 @@ bell-b001     3606031       2021-06-25T21:48:04
 bell-b004     3606035       2021-06-25T21:52:04
 bell-b002     3598003       2021-06-26T06:34:30
 ```
+
+## Author:
+   Lev Gorenstein <lev@purdue.edu>, Purdue University Research Computing, 2021.
+
+   Contribute: https://github.com/lgorenstein/longest-job
+
