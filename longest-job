@@ -287,30 +287,37 @@ if [[ ${#REPORT_NODENAMES[@]} -eq 0 ]]; then
    REPORT_NODENAMES=( "${!ENDTIME[@]}" )
 fi
 
-# And report expectation of the last-to-finish job on each node of interest.
-# Quiet mode:   print just node/jobid/entime table (no header).
+# Prepare output format string and header.
+# Quiet mode:   print just node/jobid/endtime table (no header).
 # Normal mode:  same with header.
-# Verbose mode: node/jobid/time and bunch of job parameters (with header).
+# Verbose mode: node/jobid/time plus bunch of job parameters (with header).
 wnodes=$(max_width "${REPORT_NODENAMES[@]}")
 wjobid=$(max_width "${JOBID[@]}")
 wendtime=$(max_width "${ENDTIME[@]}")
-FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %s\n"
-if [[ $verbo -eq 0 ]]; then
-   printf "$FMT" "NODE" "JobID" "END_TIME"
-elif [[ $verbo -ge 0 ]]; then
+if [[ $verbo -le 0 ]]; then
+   FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %-${wendtime:-19}s\n"
+   HEADER=( "NODE" "JobID" "END_TIME" )
+else
    FMT="%-${wnodes:-12}s  %-${wjobid:-12}s  %-${wendtime:-19}s  %s\n"
-   printf "$FMT" "NODE" "JobID" "END_TIME"  "USER      ACCOUNT      NAME             NODES   CPUS  TIME_LIMIT ST TIME"
+   HEADER=( "NODE" "JobID" "END_TIME"  "USER      ACCOUNT      NAME             NODES   CPUS  TIME_LIMIT ST TIME" )
 fi
+if [[ $verbo -ge 0 ]]; then
+   printf "$FMT" "${HEADER[@]}"
+fi
+
+# And report expectation of the last-to-finish job on each node of interest.
 for node in "${REPORT_NODENAMES[@]}"; do
    jobid="${JOBID[$node]}"
    endtime="${ENDTIME[$node]}"
    jobinfo="${JOBINFO[$node]}"
-   if [[ -n $jobid && -n $endtime ]]; then
-      if [[ $verbo -le 0 ]]; then
-         printf "$FMT"  "$node" "$jobid" "$endtime"
-      else
-         printf "$FMT"  "$node" "$jobid" "$endtime" "$jobinfo"
-      fi
+   if [[ $verbo -le 0 ]]; then
+      output=( "$node" "$jobid" "$endtime" )
+   else
+      output=( "$node" "$jobid" "$endtime" "$jobinfo" )
+   fi
+    if [[ -n $jobid && -n $endtime ]]; then
+
+         printf "$FMT"  "${output[@]}"
    fi
 done | sort "${SORT_OPTS[@]}"
 
