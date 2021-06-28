@@ -46,6 +46,9 @@ Cue this excerpt from `man scontrol`:
    > `scontrol show hostlist` can also take the absolute pathname of a file
    > (beginning with the character '/') containing a list of hostnames.
 
+Note: if a node does not have active running jobs (e.g. is idle or offlined),
+no output is generated for it (even if the node has been specified explicitly). Because "no job" means "no longest job either".
+
 
 ## Example
 By node in a given partition:
