@@ -10,7 +10,7 @@
 #
 # ----------------------------------------------------------------------
 
-VERSION="0.3"          # Increment me!
+VERSION="0.3.1" 	# Increment me!
 PROGNAME=${BASH_SOURCE##*/}
 
 # ----------------------------------------------------------------------
@@ -24,9 +24,9 @@ set -o pipefail
 # Auxillary functions.
 # ----------------------------------------------------------------------
 # Exit codes:
-E_OK=0                # Successful termination
-E_CMDLINE=1             # Bad command line
-E_RUNTIME=2             # Runtime error
+E_OK=0 			# Successful termination
+E_CMDLINE=1 		# Bad command line
+E_RUNTIME=2 		# Runtime error
 
 warn() {
    # warn [-p] "message" ["message"...]
@@ -241,13 +241,6 @@ if [[ $# -gt 0 ]]; then
    SQUEUE_OPTS+=( -w "$REPORT_NODELIST" )
 fi
 
-# Default is to sort by node name, but '-t|--time' overrides it.
-export LC_ALL=C
-SORT_OPTS=( -k 1,1 -k 3,3 -k 2,2n )
-if [[ $sortbytime -ne 0 ]]; then
-   SORT_OPTS=( -k 3,3 -k 1,1 -k 2,2n )
-fi
-
 
 # ----------------------------------------------------------------------
 # Main logic
@@ -310,6 +303,11 @@ if [[ $verbo -ge 0 ]]; then
 fi
 
 # And report expectation of the last-to-finish job on each node of interest.
+# Default is to sort by node name, but '-t|--time' overrides it.
+SORT_OPTS=( -b -k 1,1 -k 3,3 )
+if [[ $sortbytime -ne 0 ]]; then
+   SORT_OPTS=( -b -k 3,3 -k 1,1 )
+fi
 for node in "${REPORT_NODENAMES[@]}"; do
    jobid="${JOBID[$node]}"
    endtime="${ENDTIME[$node]}"
@@ -319,11 +317,10 @@ for node in "${REPORT_NODENAMES[@]}"; do
    else
       output=( "$node" "$jobid" "$endtime" "$jobinfo" )
    fi
-    if [[ -n $jobid && -n $endtime ]]; then
-
-         printf "$FMT"  "${output[@]}"
+   if [[ -n $jobid && -n $endtime ]]; then
+      printf "$FMT"  "${output[@]}"
    fi
-done | sort "${SORT_OPTS[@]}"
+done | env LC_ALL=C sort "${SORT_OPTS[@]}"
 
 
 # ----------------------------------------------------------------------
